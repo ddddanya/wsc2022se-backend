@@ -2,7 +2,7 @@ const mysql = require('../helpers/mysql');
 
 const validateGameCreation = async (req, res, next) => {
     const errors = {}
-    const { title, description } = req.body
+    const {title, description} = req.body
 
     if (!title) {
         errors.title = {

@@ -5,9 +5,12 @@ dotenv.config();
 
 const authMiddleware = async (req, res, next) => {
     if (req.method === "OPTIONS") {
-        next()
+        return next()
     }
     try {
+        if (req.path.includes("/upload")) {
+            return next()
+        }
         if (!req.headers.authorization) {
             return res.status(401).json({ status: 'unauthenticated', message: "Missing token" })
         }

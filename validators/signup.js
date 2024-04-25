@@ -2,9 +2,9 @@ const mysql = require('../helpers/mysql');
 
 const validateSignup = async (req, res, next) => {
     const errors = {}
-    const { username, password } = req.body
+    const {username, password} = req.body
 
-if (!username) {
+    if (!username) {
         errors.username = {
             message: 'required'
         }

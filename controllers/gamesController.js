@@ -1,6 +1,8 @@
 const fs = require('fs');
 const mysql = require('../helpers/mysql')
 const {generateSlug} = require("../utils/generateSlug");
+const jwt = require("jsonwebtoken");
+const unzipper = require('unzipper');
 
 const getGames = async (req, res) => {
     // get query params
@@ -31,8 +33,8 @@ const getGames = async (req, res) => {
     }
 
     // mysql query
-    const query = `SELECT * FROM games LIMIT ${size} OFFSET ${offset}`
-    const result = await mysql.call(query)
+    const query = `SELECT * FROM games LIMIT ? OFFSET ?`
+    const result = await mysql.call(query, [parseInt(size), parseInt(offset)])
 
     // get versions, author and scores
     for (let i in result) {
@@ -128,7 +130,7 @@ const getGames = async (req, res) => {
 
 const createGame = async (req, res) => {
     // get title and description
-    const { title, description } = req.body
+    const {title, description} = req.body
     // mysql query
     const query = `INSERT INTO games (title, description, slug, ownerId) VALUES (?, ?, ?, ?)`
     const slug = await generateSlug(title)
@@ -143,13 +145,13 @@ const createGame = async (req, res) => {
 
 const getGame = async (req, res) => {
     // get slug
-    const { slug } = req.params
+    const {slug} = req.params
     // mysql query
     const game = await mysql.call(`SELECT * FROM games WHERE slug = ?`, [slug])
 
     // check if game exists
     if (game.length === 0) {
-        return res.status(404).json({ status: 'notfound', message: 'game not found' })
+        return res.status(404).json({status: 'notfound', message: 'game not found'})
     }
 
     // get versions, author and scores
@@ -196,14 +198,14 @@ const getGame = async (req, res) => {
 
 const editGame = async (req, res) => {
     // get slug
-    const { slug } = req.params
+    const {slug} = req.params
     // get title and description
-    let { title, description } = req.body
+    let {title, description} = req.body
 
     // check if user is owner
     const game = await mysql.call(`SELECT * FROM games WHERE slug = ?`, [slug])
     if (game[0].ownerId !== req.user.id) {
-        return res.status(403).json({ status: 'forbidden', message: 'you are not the game author' })
+        return res.status(403).json({status: 'forbidden', message: 'you are not the game author'})
     }
 
     // set default values
@@ -226,12 +228,12 @@ const editGame = async (req, res) => {
 
 const deleteGame = async (req, res) => {
     // get slug
-    const { slug } = req.params
+    const {slug} = req.params
 
     // check if user is owner
     const game = await mysql.call(`SELECT * FROM games WHERE slug = ?`, [slug])
     if (game[0].ownerId !== req.user.id) {
-        return res.status(403).json({ status: 'forbidden', message: 'you are not the game author' })
+        return res.status(403).json({status: 'forbidden', message: 'you are not the game author'})
     }
 
     // mysql query
@@ -244,10 +246,74 @@ const deleteGame = async (req, res) => {
     })
 }
 
+const uploadGame = async (req, res) => {
+    // get slug
+    const {slug} = req.params
+
+    const {token} = req.body
+
+    // check token
+    const decodedData = jwt.verify(token, process.env.JWT_SECRET)
+    const user = await mysql.call(`SELECT * FROM app_users WHERE id = ?`, [decodedData.id]);
+    if (user.length === 0) {
+        return res.status(401).json({status: 'unauthenticated', message: "Invalid token"})
+    }
+    if (user[0].blocked == "true") {
+        return res.status(403).json({
+            status: 'blocked',
+            message: "User blocked",
+            reason: "You have been blocked by an administrator"
+        })
+    }
+
+    // check if user is owner
+    const game = await mysql.call(`SELECT * FROM games WHERE slug = ?`, [slug])
+    if (!game[0]) {
+        return res.status(404).send("Game not found")
+    }
+    if (game[0].ownerId !== user[0].id) {
+        return res.status(403).send("User is not author of the game")
+    }
+
+    const {zipfile} = req.files
+    if (!zipfile) {
+        return res.status(400) // TODO
+    }
+
+    // get last version
+    const query = `SELECT * FROM games_versions WHERE gameId = ? ORDER BY timestamp DESC LIMIT 1`
+    const lastVersion = await mysql.call(query, [game[0].id])
+
+    // create new version
+    const versionId = lastVersion.length > 0 ? lastVersion[0].versionId + 1 : 1
+    const versionPath = `./games/${slug}/v${versionId}`
+    fs.mkdirSync(versionPath, {recursive: true})
+    zipfile.mv(`${versionPath}/${zipfile.name}`)
+    // unzip
+    await new Promise((resolve, reject) => {
+        fs.createReadStream(`${versionPath}/${zipfile.name}`)
+            .pipe(unzipper.Extract({path: `${versionPath}`}))
+            .on('close', () => {
+                resolve()
+            })
+            .on('error', (err) => {
+                res.status(500).send("ZIP file extraction fails")
+            })
+    })
+
+    // mysql query
+    const insertVersionQuery = `INSERT INTO games_versions (gameId, versionId, timestamp) VALUES (?, ?, ?)`
+    // call mysql
+    mysql.call(insertVersionQuery, [game[0].id, versionId, new Date()])
+
+    res.status(200).send("Game uploaded")
+}
+
 module.exports = {
     getGames,
     createGame,
     getGame,
     editGame,
-    deleteGame
+    deleteGame,
+    uploadGame
 }

@@ -7,7 +7,7 @@ const signup = async (req, res) => {
     const result = await mysql.call(query, [username, password]);
 
     const token = generateToken(result.insertId);
-    res.json({
+    res.status(201).json({
         status: 'success',
         token
     });

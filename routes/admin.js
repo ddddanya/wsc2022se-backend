@@ -92,12 +92,12 @@ router.get('/users', async function (req, res, next) {
 })
 
 // GET /admin/users/:id, render user page
-router.get('/users/:id', async function (req, res, next) {
+router.get('/users/:username', async function (req, res, next) {
     // get id from params
-    const {id} = req.params;
+    const {username} = req.params;
 
     // query to get user by id
-    const user = await mysql.call(`SELECT * FROM app_users WHERE id = ?`, [id]);
+    const user = await mysql.call(`SELECT * FROM app_users WHERE username = ?`, [username]);
 
     // if user not found
     if (user.length === 0) {
@@ -105,17 +105,23 @@ router.get('/users/:id', async function (req, res, next) {
         res.redirect('/admin/users');
     }
 
+    // if user blocked
+    if (user[0].blocked === 'true') {
+        // redirect to /admin/users
+        res.render("404")
+    }
+
     // render user page
     res.render('user', {user: user[0]});
 })
 
 // POST /admin/users/:id/block, block user by id
-router.post('/users/:id/block', async function (req, res, next) {
+router.post('/users/:username/block', async function (req, res, next) {
     // get id from params
-    const {id} = req.params;
+    const {username} = req.params;
 
     // query to block user by id
-    const result = await mysql.call(`UPDATE app_users SET blocked = 'true' WHERE id = ?`, [id]);
+    const result = await mysql.call(`UPDATE app_users SET blocked = 'true' WHERE username = ?`, [username]);
 
     // redirect to /admin/users/:id
     res.redirect(`/admin/users`);

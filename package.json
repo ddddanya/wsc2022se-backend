@@ -11,10 +11,14 @@
     "dotenv": "^16.4.5",
     "ejs": "~2.6.1",
     "express": "~4.16.1",
+    "express-fileupload": "^1.5.0",
+    "extract-zip": "^2.0.1",
     "http-errors": "~1.6.3",
     "jsonwebtoken": "^9.0.2",
     "morgan": "~1.9.1",
     "mysql2": "^3.9.3",
+    "unzip": "^0.1.11",
+    "unzipper": "^0.11.3",
     "validator": "^13.11.0"
   }
 }
